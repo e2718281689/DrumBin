@@ -22,20 +22,20 @@ jobs:
           python-version: "3.11"
           auto-activate-base: false
 
-      - name: Show conda info (debug)
+      - name: Debug conda
         shell: bash -l {0}
         run: |
-          which conda
+          source "$CONDA/etc/profile.d/conda.sh"
           conda info
           conda list
 
-      - name: Build EXE with PyInstaller
+      - name: Build EXE
         shell: bash -l {0}
         run: |
-          which python
+          source "$CONDA/etc/profile.d/conda.sh"
+          conda activate binbeats
           python -V
           pyinstaller --name BinBeats --onefile --noconsole app.py
-          ls -l dist --name BinBeats --onefile --noconsole app.py
           ls -l dist
 
       - name: Upload artifact
