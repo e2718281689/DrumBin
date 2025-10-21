@@ -1,4 +1,4 @@
-name: Build BinBeats (conda)
+name: Build DrumBin (conda)
 
 on:
   workflow_dispatch:    # 手动触发
@@ -17,7 +17,7 @@ jobs:
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
-          activate-environment: binbeats
+          activate-environment: DrumBin
           environment-file: environment.yml
           python-version: "3.11"
           auto-activate-base: false
@@ -33,16 +33,16 @@ jobs:
         shell: bash -l {0}
         run: |
           source "$CONDA/etc/profile.d/conda.sh"
-          conda activate binbeats
+          conda activate DrumBin
           python -V
-          pyinstaller --name BinBeats --onefile --noconsole app.py
+          pyinstaller --name DrumBin --onefile --noconsole app.py
           ls -l dist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BinBeats-windows
-          path: dist/BinBeats.exe
+          name: DrumBin-windows
+          path: dist/DrumBin.exe
 
   release:
     needs: win-exe
@@ -52,11 +52,11 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: BinBeats-windows
+          name: DrumBin-windows
           path: dist
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/BinBeats.exe
+          files: dist/DrumBin.exe
           generate_release_notes: true
