@@ -16,7 +16,8 @@ from PySide6.QtWidgets import (
     QLineEdit, QTabWidget, QMainWindow
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QDesktopServices
+from PySide6.QtCore import QUrl
 
 # ---- Common helpers for WAV page ----
 
@@ -251,6 +252,8 @@ class BinBeatsPage(QWidget):
 
         self.align_spin.valueChanged.connect(self.on_align_changed)
         self.hex_check.stateChanged.connect(self.on_hex_changed)
+        # Sync initial state
+        self.on_hex_changed(self.hex_check.checkState())
 
         # Layout
         bar1 = QHBoxLayout()
@@ -403,12 +406,13 @@ class MidiTable(QTableWidget):
     COL_TRACKS = 3
     COL_TARGET = 4
     COL_OUTPUT = 5
-    COL_STATUS = 6
+    COL_HEADER = 6
+    COL_STATUS = 7
 
     def __init__(self, parent=None):
-        super().__init__(0, 7, parent)
+        super().__init__(0, 8, parent)
         self.setHorizontalHeaderLabels(
-            ["Index", "Filename", "PPQN", "Tracks", "Target PPQN", "Output", "Status"]
+            ["Index", "Filename", "PPQN", "Tracks", "Target PPQN", "Output (.mid)", "Header (.h)", "Status"]
         )
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -515,6 +519,7 @@ class MidiTable(QTableWidget):
             self.setItem(i, self.COL_TRACKS, QTableWidgetItem(str(item["tracks"])))
             self.setItem(i, self.COL_TARGET, QTableWidgetItem(str(self.target_ppqn)))
             self.setItem(i, self.COL_OUTPUT, QTableWidgetItem(out_path))
+            self.setItem(i, self.COL_HEADER, QTableWidgetItem(item.get("header", "")))
             self.setItem(i, self.COL_STATUS, QTableWidgetItem(item.get("status", "")))
 
         self.resizeColumnsToContents()
@@ -528,6 +533,7 @@ class MidiTable(QTableWidget):
         successes = 0
         copies = 0
         errors = 0
+        header_paths = []
 
         if self.out_dir and not os.path.isdir(self.out_dir):
             try:
@@ -546,6 +552,7 @@ class MidiTable(QTableWidget):
             try:
                 result = convert_midi_ppqn(src, dst, self.target_ppqn)
                 header_ok = ""
+                header_path = ""
                 if self.export_hex:
                     try:
                         folder = os.path.dirname(dst)
@@ -553,8 +560,11 @@ class MidiTable(QTableWidget):
                         varname = to_c_identifier(base + "_hex")
                         header_path = os.path.join(folder, f"{base}_hex.h")
                         export_hex_header_from_file(dst, header_path, varname)
+                        item["header"] = header_path
+                        header_paths.append(header_path)
                         header_ok = " +hex.h"
                     except Exception as he:
+                        item["header"] = f"ERROR: {he}"
                         header_ok = f" (+hex FAILED: {he})"
                 if result == "converted":
                     item["status"] = "OK" + header_ok
@@ -570,11 +580,12 @@ class MidiTable(QTableWidget):
                 errors += 1
 
             self.setItem(i, self.COL_OUTPUT, QTableWidgetItem(dst))
+            self.setItem(i, self.COL_HEADER, QTableWidgetItem(item.get("header", "")))
             self.setItem(i, self.COL_STATUS, QTableWidgetItem(item["status"]))
 
         self.resizeColumnsToContents()
 
-        msg = f"Done.\nConverted: {successes}\nCopied: {copies}\nErrors: {errors}"
+        msg = f"Done.\nConverted: {successes}\nCopied: {copies}\nErrors: {errors}" + ("\n\nHeaders:\n" + "\n".join(header_paths) if header_paths else "")
         if errors:
             QMessageBox.warning(self, "Completed with errors", msg)
         else:
@@ -591,6 +602,8 @@ class MidiPPQNPage(QWidget):
         btn_up = QPushButton("Move Up")
         btn_down = QPushButton("Move Down")
         btn_convert = QPushButton("Convert All")
+        btn_open_dir = QPushButton("Open Output Dir")
+        btn_export_headers = QPushButton("Export Headers")
 
         self.ppqn_spin = QSpinBox()
         self.ppqn_spin.setRange(12, 9600)
@@ -607,6 +620,7 @@ class MidiPPQNPage(QWidget):
 
         # NEW: export unsigned char hex array switch
         self.hex_check = QCheckBox("Also export unsigned char hex array header (.h)")
+        self.hex_check.setChecked(True)
 
         # Wire
         btn_add.clicked.connect(self.choose_files)
@@ -614,12 +628,16 @@ class MidiPPQNPage(QWidget):
         btn_up.clicked.connect(self.table.move_up)
         btn_down.clicked.connect(self.table.move_down)
         btn_convert.clicked.connect(self.table.convert_all)
+        btn_open_dir.clicked.connect(self.open_output_dir)
+        btn_export_headers.clicked.connect(self.export_headers_only)
 
         self.ppqn_spin.valueChanged.connect(self.on_ppqn_changed)
         btn_choose_dir.clicked.connect(self.choose_out_dir)
         btn_clear_dir.clicked.connect(self.clear_out_dir)
         self.overwrite_check.stateChanged.connect(self.on_overwrite_changed)
         self.hex_check.stateChanged.connect(self.on_hex_changed)
+        # Sync initial state
+        self.on_hex_changed(self.hex_check.checkState())
 
         # Layout
         bar1 = QHBoxLayout()
@@ -629,6 +647,8 @@ class MidiPPQNPage(QWidget):
         bar1.addWidget(btn_up)
         bar1.addWidget(btn_down)
         bar1.addWidget(btn_convert)
+        bar1.addWidget(btn_open_dir)
+        bar1.addWidget(btn_export_headers)
 
         bar2 = QHBoxLayout()
         bar2.addWidget(QLabel("Target PPQN:"))
@@ -671,6 +691,54 @@ class MidiPPQNPage(QWidget):
 
     def on_hex_changed(self, state):
         self.table.set_export_hex(state == Qt.Checked)
+
+    def export_headers_only(self):
+        # Export headers for selected rows (or all if none selected)
+        rows = sorted({idx.row() for idx in self.table.selectedIndexes()})
+        if not rows:
+            rows = list(range(len(self.table.items)))
+        if not rows:
+            QMessageBox.information(self, "Info", "No items to export headers for.")
+            return
+        created = []
+        failed = []
+        for r in rows:
+            item = self.table.items[r]
+            # Determine dst path as shown in table
+            dst = self.table.item(r, self.table.COL_OUTPUT).text()
+            if not os.path.isfile(dst):
+                failed.append((r, "MID not found: " + dst))
+                continue
+            try:
+                folder = os.path.dirname(dst)
+                base = os.path.splitext(os.path.basename(dst))[0]
+                varname = to_c_identifier(base + "_hex")
+                header_path = os.path.join(folder, f"{base}_hex.h")
+                export_hex_header_from_file(dst, header_path, varname)
+                item["header"] = header_path
+                self.table.setItem(r, self.table.COL_HEADER, QTableWidgetItem(header_path))
+                created.append(header_path)
+            except Exception as e:
+                item["header"] = f"ERROR: {e}"
+                self.table.setItem(r, self.table.COL_HEADER, QTableWidgetItem(item["header"]))
+                failed.append((r, str(e)))
+        msg = []
+        if created:
+            msg.append("Created:\n" + "\n".join(created))
+        if failed:
+            msg.append("Failed:\n" + "\n".join([f"row {r}: {err}" for r, err in failed]))
+        QMessageBox.information(self, "Header Export", "\n\n".join(msg) if msg else "Nothing to do.")
+
+    def open_output_dir(self):
+        # Prefer explicit out dir; else use first item's src folder
+        target = self.out_dir_edit.text().strip()
+        if not target and self.table.items:
+            target = os.path.dirname(self.table.items[0]["path"])
+        if not target:
+            QMessageBox.information(self, "Info", "No output directory to open.")
+            return
+        url = QUrl.fromLocalFile(target)
+        QDesktopServices.openUrl(url)
 
     def choose_files(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Select MIDI files", "",
