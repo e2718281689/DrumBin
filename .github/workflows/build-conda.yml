@@ -60,6 +60,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/DrumBin.exe
-                 dist/wav2c_gui.exe
+          files: |
+                dist/DrumBin.exe
+                dist/wav2c_gui.exe
           generate_release_notes: true
