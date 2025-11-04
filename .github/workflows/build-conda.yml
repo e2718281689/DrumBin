@@ -36,6 +36,7 @@ jobs:
           conda activate DrumBin
           python -V
           pyinstaller --name DrumBin --onefile --noconsole app.py
+          pyinstaller --name wav2c_gui --onefile --noconsole wav2c_gui.py
           ls -l dist
 
       - name: Upload artifact
@@ -43,6 +44,7 @@ jobs:
         with:
           name: DrumBin-windows
           path: dist/DrumBin.exe
+                dist/wav2c_gui.exe
 
   release:
     needs: win-exe
@@ -59,4 +61,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/DrumBin.exe
+                 dist/wav2c_gui.exe
           generate_release_notes: true
