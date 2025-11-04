@@ -9,3 +9,4 @@ dependencies:
       - pyinstaller
       - mido
       - numpy
+      - soundfile

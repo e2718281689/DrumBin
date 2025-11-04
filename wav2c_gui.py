@@ -11,6 +11,7 @@ import os
 import re
 import wave
 import traceback
+import soundfile
 from typing import Optional
 
 import numpy as np
@@ -26,37 +27,12 @@ from PySide6.QtGui import QDesktopServices
 
 # ---------- 音频读取与转换 ----------
 def wav_to_float_mono(filepath):
-    with wave.open(filepath, 'rb') as wf:
-        n_channels = wf.getnchannels()
-        sampwidth = wf.getsampwidth()
-        framerate = wf.getframerate()
-        n_frames = wf.getnframes()
-        frames = wf.readframes(n_frames)
-
-    # 转 numpy 浮点 [-1,1]
-    if sampwidth == 1:
-        data = np.frombuffer(frames, dtype=np.uint8).astype(np.float32)
-        data = (data - 128.0) / 128.0
-    elif sampwidth == 2:
-        data = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
-    elif sampwidth == 3:
-        a = np.frombuffer(frames, dtype=np.uint8).reshape(-1, 3)
-        tmp = (a[:, 0].astype(np.int32) |
-               (a[:, 1].astype(np.int32) << 8) |
-               (a[:, 2].astype(np.int32) << 16))
-        # 24-bit 符号扩展
-        mask = tmp & 0x800000
-        tmp = tmp - (mask << 1)
-        data = tmp.astype(np.float32) / 8388608.0
-    elif sampwidth == 4:
-        data = np.frombuffer(frames, dtype=np.int32).astype(np.float32) / 2147483648.0
-    else:
-        raise ValueError(f"Unsupported sample width: {sampwidth} bytes")
-
-    if n_channels > 1:
-        data = data.reshape(-1, n_channels).mean(axis=1)
-
-    return data.astype(np.float32), framerate
+    import soundfile as sf
+    # 读取为 float32，always_2d=True 可统一形状 (N, C)
+    data, sr = sf.read(filepath, dtype='float32', always_2d=True)
+    # 合并为单声道（均值）
+    mono = data.mean(axis=1).astype(np.float32)
+    return mono, int(sr)
 
 
 def sanitize_var_name(name: str) -> str:
