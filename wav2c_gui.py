@@ -1,74 +1,111 @@
 # -*- coding: utf-8 -*-
 """
 PySide6 GUI: Drag-and-drop WAV -> C-style float array (.h)
+
 - 默认输出到源文件同目录；也可自选输出目录
 - 立体声自动转单声道（取均值）
-- 支持 8/16/24/32-bit PCM
-- 可截取合并单声道后的前 N 个采样点（N=0 表示全部）
+- 使用 soundfile 读取多种位深
 """
 
 import os
 import re
-import wave
-import traceback
-import soundfile
 from typing import Optional
 
 import numpy as np
+import soundfile as sf
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
-    QFileDialog, QMessageBox, QLabel, QHBoxLayout, QAbstractItemView, QSpinBox, QCheckBox,
-    QLineEdit, QMainWindow
+    QApplication,
+    QCheckBox,
+    QFileDialog,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QStatusBar,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+    QMainWindow,
 )
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices
-
-
-# ---------- 音频读取与转换 ----------
-def wav_to_float_mono(filepath):
-    import soundfile as sf
-    # 读取为 float32，always_2d=True 可统一形状 (N, C)
-    data, sr = sf.read(filepath, dtype='float32', always_2d=True)
-    # 合并为单声道（均值）
-    mono = data.mean(axis=1).astype(np.float32)
-    return mono, int(sr)
 
 
 def sanitize_var_name(name: str) -> str:
-    base = re.sub(r'[^A-Za-z0-9_]', '_', name)
+    """把文件名转成合法的 C 变量名."""
+    base = os.path.splitext(os.path.basename(name))[0]
+    base = re.sub(r"[^0-9a-zA-Z_]", "_", base)
+    if re.match(r"^[0-9]", base):
+        base = "_" + base
     if not base:
-        base = 'pcm_data'
-    if base[0].isdigit():
-        base = '_' + base
+        base = "wav_data"
     return base
 
 
-def to_c_array_str(arr: np.ndarray, var_name: str, samplerate: Optional[int] = None, per_line: int = 10) -> str:
-    header = ""
-    if samplerate is not None:
-        header += f"// Sample rate: {int(samplerate)} Hz\n"
-    header += f"// Length: {len(arr)} samples (mono, float32, range [-1, 1])\n"
-    header += f"static const float {var_name}[] = {{\n"
-    for i in range(0, len(arr), per_line):
-        line = ", ".join(f"{x:.6f}" for x in arr[i:i+per_line])
-        header += f"    {line}"
-        if i + per_line < len(arr):
-            header += ","
-        header += "\n"
-    header += "};\n"
-    return header
+def wav_to_mono_float(path: str, max_samples: int = 0) -> tuple[np.ndarray, int]:
+    """读取 wav，转为单声道 float32 数组和采样率."""
+    data, sr = sf.read(path, always_2d=True, dtype="float32")
+    # (samples, channels) -> (samples,)
+    mono = data.mean(axis=1)
+    if max_samples > 0:
+        mono = mono[:max_samples]
+    return mono, sr
 
 
-# ---------- 拖拽表格 ----------
-class DropTable(QTableWidget):
+def to_c_array_header(
+    samples: np.ndarray,
+    sr: int,
+    var_name: str,
+) -> str:
+    """生成一个简单的 .h 内容."""
+    header_guard = re.sub(r"[^0-9A-Z_]", "_", var_name.upper()) + "_H"
+    lines = []
+    lines.append(f"#ifndef {header_guard}")
+    lines.append(f"#define {header_guard}")
+    lines.append("")
+    lines.append("/*")
+    lines.append(f" * Generated from WAV file")
+    lines.append(f" * Sample rate : {sr} Hz")
+    lines.append(f" * Length      : {len(samples)} samples")
+    lines.append(" */")
+    lines.append("")
+    lines.append("/* clang-format off */")
+    lines.append(f"static const int {var_name}_sr = {sr};")
+    lines.append(f"static const int {var_name}_len = {len(samples)};")
+    lines.append(f"static const float {var_name}[] = {{")
+
+    # 每行 8 个
+    row = []
+    for i, v in enumerate(samples):
+        row.append(f"{v:.8f}")
+        if (i + 1) % 8 == 0:
+            lines.append("    " + ", ".join(row) + ",")
+            row = []
+    if row:
+        lines.append("    " + ", ".join(row) + ",")
+
+    lines.append("};")
+    lines.append("/* clang-format on */")
+    lines.append("")
+    lines.append(f"#endif /* {header_guard} */")
+    lines.append("")
+    return "\n".join(lines)
+
+
+class WavDropList(QListWidget):
+    """支持拖放 WAV 文件的列表."""
+
     def __init__(self, parent=None):
-        super().__init__(0, 3, parent)
-        self.setHorizontalHeaderLabels(["WAV file", "Output .h", "Status"])
+        super().__init__(parent)
         self.setAcceptDrops(True)
-        self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.horizontalHeader().setStretchLastSection(True)
+        self.setSelectionMode(QListWidget.ExtendedSelection)
+        self.setAlternatingRowColors(True)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -77,200 +114,221 @@ class DropTable(QTableWidget):
             super().dragEnterEvent(event)
 
     def dragMoveEvent(self, event):
-        event.acceptProposedAction()
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
 
     def dropEvent(self, event):
-        urls = event.mimeData().urls()
-        paths = []
-        for u in urls:
-            p = u.toLocalFile()
-            if os.path.isdir(p):
-                for root, _, files in os.walk(p):
-                    for f in files:
-                        if f.lower().endswith(".wav"):
-                            paths.append(os.path.join(root, f))
-            elif p.lower().endswith(".wav"):
-                paths.append(p)
-        if paths:
-            self.add_files(paths)
+        if not event.mimeData().hasUrls():
+            return super().dropEvent(event)
+        for url in event.mimeData().urls():
+            path = url.toLocalFile()
+            if path.lower().endswith(".wav"):
+                self.add_path(path)
+        event.acceptProposedAction()
 
-    def add_files(self, paths):
-        existed = set()
-        for r in range(self.rowCount()):
-            existed.add(self.item(r, 0).text())
-        added = 0
-        for p in paths:
-            if p not in existed:
-                r = self.rowCount()
-                self.insertRow(r)
-                self.setItem(r, 0, QTableWidgetItem(p))
-                self.setItem(r, 1, QTableWidgetItem(""))
-                self.setItem(r, 2, QTableWidgetItem("Queued"))
-                added += 1
-        return added
+    def add_path(self, path: str):
+        # 去重
+        for i in range(self.count()):
+            if self.item(i).data(Qt.UserRole) == path:
+                return
+        item = QListWidgetItem(os.path.basename(path))
+        item.setToolTip(path)
+        item.setData(Qt.UserRole, path)
+        self.addItem(item)
 
-    def clear_rows(self):
-        self.setRowCount(0)
+    def paths(self) -> list[str]:
+        return [self.item(i).data(Qt.UserRole) for i in range(self.count())]
 
 
-# ---------- 主窗体 ----------
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("WAV → C float array (.h) - PySide6")
-        self.resize(900, 560)
+class Wav2CWidget(QWidget):
+    """可嵌入的 WAV → C 数组转换 Widget."""
 
-        central = QWidget(self)
-        self.setCentralWidget(central)
-        v = QVBoxLayout(central)
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
-        # 顶部：输出目录选项
-        top = QHBoxLayout()
-        self.chkSameDir = QCheckBox("Use same directory as each file (default)")
-        self.chkSameDir.setChecked(True)
-        self.outEdit = QLineEdit()
-        self.outEdit.setPlaceholderText("Select an output directory (disabled when using same dir)")
-        self.outEdit.setEnabled(False)
-        self.btnBrowse = QPushButton("Browse...")
-        self.btnBrowse.setEnabled(False)
-        top.addWidget(self.chkSameDir)
-        top.addWidget(self.outEdit, 1)
-        top.addWidget(self.btnBrowse)
-        v.addLayout(top)
-
-        # 第二行：N 截取
-        rowN = QHBoxLayout()
-        rowN.addWidget(QLabel("Take first N samples (after mono):"))
-        self.spinN = QSpinBox()
-        self.spinN.setRange(0, 10_000_000)
-        self.spinN.setValue(0)
-        rowN.addWidget(self.spinN)
-        rowN.addWidget(QLabel("0 means all"))
-        rowN.addStretch(1)
-        v.addLayout(rowN)
-
-        # 表格（拖拽）
-        self.table = DropTable()
-        v.addWidget(self.table, 1)
-
-        # 底部按钮与状态
-        bottom = QHBoxLayout()
-        self.btnAdd = QPushButton("Add WAV...")
-        self.btnClear = QPushButton("Clear list")
-        self.btnOpenOut = QPushButton("Open output dir")
-        self.btnOpenOut.setEnabled(False)
-        bottom.addWidget(self.btnAdd)
-        bottom.addWidget(self.btnClear)
-        bottom.addStretch(1)
-        bottom.addWidget(self.btnOpenOut)
-        self.btnConvert = QPushButton("Convert to .h")
-        bottom.addWidget(self.btnConvert)
-        v.addLayout(bottom)
-
-        self.status = QLabel("Ready.")
-        v.addWidget(self.status)
-
-        # 信号
-        self.chkSameDir.toggled.connect(self._toggle_same_dir)
-        self.btnBrowse.clicked.connect(self._choose_outdir)
-        self.btnOpenOut.clicked.connect(self._open_outdir)
-        self.btnAdd.clicked.connect(self._add_dialog)
-        self.btnClear.clicked.connect(self.table.clear_rows)
-        self.btnConvert.clicked.connect(self._convert_all)
-
-        # 状态
         self.fixed_out_dir: Optional[str] = None
 
-    # ---- 槽函数 ----
+        main_layout = QVBoxLayout(self)
+
+        # --- 输出目录设置 ---
+        box_out = QGroupBox("Output directory")
+        g = QGridLayout(box_out)
+
+        self.chkSameDir = QCheckBox("Use the same directory as each WAV file")
+        self.chkSameDir.setChecked(True)
+        g.addWidget(self.chkSameDir, 0, 0, 1, 3)
+
+        g.addWidget(QLabel("Fixed output directory:"), 1, 0)
+        self.outEdit = QLineEdit()
+        self.outEdit.setPlaceholderText("Choose output directory (disabled when using same dir)")
+        self.outEdit.setEnabled(False)
+        g.addWidget(self.outEdit, 1, 1)
+
+        self.btnBrowse = QPushButton("Browse…")
+        self.btnBrowse.setEnabled(False)
+        g.addWidget(self.btnBrowse, 1, 2)
+
+        main_layout.addWidget(box_out)
+
+        # --- 采样截断设置 ---
+        box_opts = QGroupBox("Options")
+        hopt = QHBoxLayout(box_opts)
+
+        hopt.addWidget(QLabel("Max samples (0 = all):"))
+        self.spnMaxSamples = QSpinBox()
+        self.spnMaxSamples.setRange(0, 10_000_000)
+        self.spnMaxSamples.setValue(0)
+        hopt.addWidget(self.spnMaxSamples)
+
+        hopt.addStretch(1)
+        main_layout.addWidget(box_opts)
+
+        # --- 文件列表 ---
+        box_files = QGroupBox("WAV files (drag here or use 'Add files…')")
+        vfiles = QVBoxLayout(box_files)
+
+        self.lstFiles = WavDropList()
+        vfiles.addWidget(self.lstFiles)
+
+        hbtn = QHBoxLayout()
+        self.btnAddFiles = QPushButton("Add files…")
+        self.btnRemoveSel = QPushButton("Remove selected")
+        self.btnClearAll = QPushButton("Clear all")
+        hbtn.addWidget(self.btnAddFiles)
+        hbtn.addWidget(self.btnRemoveSel)
+        hbtn.addWidget(self.btnClearAll)
+        hbtn.addStretch(1)
+        vfiles.addLayout(hbtn)
+
+        main_layout.addWidget(box_files, 1)
+
+        # --- 转换与日志 ---
+        hbottom = QHBoxLayout()
+        self.btnConvert = QPushButton("Convert to .h")
+        self.btnClearLog = QPushButton("Clear Log")
+        hbottom.addWidget(self.btnConvert)
+        hbottom.addWidget(self.btnClearLog)
+        hbottom.addStretch(1)
+        main_layout.addLayout(hbottom)
+
+        self.logEdit = QTextEdit()
+        self.logEdit.setReadOnly(True)
+        self.logEdit.setPlaceholderText("Log output…")
+        main_layout.addWidget(self.logEdit, 1)
+
+        # --- 信号连接 ---
+        self.btnClearLog.clicked.connect(self.logEdit.clear) 
+        self.chkSameDir.toggled.connect(self._toggle_same_dir)
+        self.btnBrowse.clicked.connect(self._choose_outdir)
+        self.btnAddFiles.clicked.connect(self._add_files)
+        self.btnRemoveSel.clicked.connect(self._remove_selected)
+        self.btnClearAll.clicked.connect(self.lstFiles.clear)
+        self.btnConvert.clicked.connect(self._convert_all)
+
+    # ----------------------
+    # 事件 / 槽函数
+    # ----------------------
+
+    def _log(self, msg: str):
+        self.logEdit.append(msg)
+
     def _toggle_same_dir(self, checked: bool):
         self.outEdit.setEnabled(not checked)
         self.btnBrowse.setEnabled(not checked)
-        self.btnOpenOut.setEnabled(not checked and bool(self.fixed_out_dir))
         if checked:
-            self.outEdit.clear()
-        self.status.setText("Output: same as each WAV" if checked else "Output: custom directory")
+            self.fixed_out_dir = None
 
     def _choose_outdir(self):
         d = QFileDialog.getExistingDirectory(self, "Choose output directory")
         if d:
             self.fixed_out_dir = d
             self.outEdit.setText(d)
-            self.btnOpenOut.setEnabled(True)
-            self.status.setText(f"Output directory: {d}")
 
-    def _open_outdir(self):
-        if self.fixed_out_dir and os.path.isdir(self.fixed_out_dir):
-            QDesktopServices.openUrl(QUrl.fromLocalFile(self.fixed_out_dir))
+    def _add_files(self):
+        files, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Choose WAV files",
+            "",
+            "WAV files (*.wav)",
+        )
+        for f in files:
+            self.lstFiles.add_path(f)
 
-    def _add_dialog(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "Select WAV files", "", "WAV files (*.wav)")
-        if files:
-            added = self.table.add_files(files)
-            self.status.setText(f"Added {added} file(s).")
+    def _remove_selected(self):
+        for item in self.lstFiles.selectedItems():
+            row = self.lstFiles.row(item)
+            self.lstFiles.takeItem(row)
+
+    def _get_outdir_for_file(self, path: str) -> str:
+        if self.chkSameDir.isChecked() or not self.fixed_out_dir:
+            return os.path.dirname(path)
+        return self.fixed_out_dir
 
     def _convert_all(self):
-        rows = self.table.rowCount()
-        if rows == 0:
-            QMessageBox.information(self, "Info", "Please add or drag WAV files into the list.")
+        files = self.lstFiles.paths()
+        if not files:
+            QMessageBox.warning(self, "No files", "Please add some WAV files first.")
             return
 
-        use_same_dir = self.chkSameDir.isChecked()
-        if not use_same_dir and not self.fixed_out_dir:
-            QMessageBox.warning(self, "Warning", "Please choose an output directory or enable 'Use same directory'.")
-            return
+        max_samples = self.spnMaxSamples.value()
 
-        n_take = self.spinN.value()
-        ok, fail = 0, 0
-        for r in range(rows):
-            wav_path = self.table.item(r, 0).text()
+        ok_count = 0
+        for path in files:
             try:
-                out_path = self._process_one(wav_path, n_take, use_same_dir)
-                self.table.setItem(r, 1, QTableWidgetItem(out_path))
-                self.table.setItem(r, 2, QTableWidgetItem("OK"))
-                self.table.item(r, 2).setForeground(Qt.green)
-                ok += 1
+                self._log(f"Processing: {path}")
+                samples, sr = wav_to_mono_float(path, max_samples=max_samples)
+                var_name = sanitize_var_name(path)
+                code = to_c_array_header(samples, sr, var_name)
+
+                out_dir = self._get_outdir_for_file(path)
+                os.makedirs(out_dir, exist_ok=True)
+                out_name = os.path.splitext(os.path.basename(path))[0] + ".h"
+                out_path = os.path.join(out_dir, out_name)
+
+                with open(out_path, "w", encoding="utf-8") as f:
+                    f.write(code)
+
+                self._log(f"  => Saved: {out_path}")
+                ok_count += 1
             except Exception as e:
-                self.table.setItem(r, 2, QTableWidgetItem("ERROR"))
-                self.table.item(r, 2).setForeground(Qt.red)
-                fail += 1
-                print(f"[ERROR] {wav_path}\n{e}\n{traceback.format_exc()}")
+                self._log(f"  !! Error: {e!r}")
 
-        self.status.setText(f"Done. Success: {ok}, Failed: {fail}")
-        if fail:
-            QMessageBox.warning(self, "Finished with errors", f"Success: {ok}, Failed: {fail}")
+        self._log(f"\nDone. {ok_count} / {len(files)} file(s) converted.")
+
+        if ok_count == len(files):
+            QMessageBox.information(self, "Done", "All files converted successfully.")
         else:
-            QMessageBox.information(self, "Finished", f"All done. Success: {ok}")
+            QMessageBox.warning(
+                self,
+                "Finished with errors",
+                f"Converted {ok_count} / {len(files)} files. See log for details.",
+            )
 
-    # ---- 核心处理 ----
-    def _process_one(self, wav_path: str, n_take: int, use_same_dir: bool) -> str:
-        data, sr = wav_to_float_mono(wav_path)
-        if n_take > 0:
-            data = data[:n_take]
 
-        stem = os.path.splitext(os.path.basename(wav_path))[0]
-        var_name = sanitize_var_name(stem) + "_pcm"
-        c_text = to_c_array_str(data, var_name=var_name, samplerate=sr, per_line=10)
+class MainWindow(QMainWindow):
+    """单独运行本文件时用到的主窗口."""
 
-        if use_same_dir:
-            out_dir = os.path.dirname(wav_path)
-        else:
-            out_dir = self.fixed_out_dir or os.path.dirname(wav_path)
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("WAV → C float array (.h) - PySide6")
+        self.resize(900, 600)
 
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"{sanitize_var_name(stem)}.h")
+        widget = Wav2CWidget(self)
+        self.setCentralWidget(widget)
 
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write("#pragma once\n\n")
-            f.write(c_text)
-
-        return out_path
+        self.status = QStatusBar(self)
+        self.setStatusBar(self.status)
+        self.status.showMessage("Ready.")
 
 
 def main():
     import sys
+
     app = QApplication(sys.argv)
-    w = MainWindow()
-    w.show()
+    win = MainWindow()
+    win.show()
     sys.exit(app.exec())
 
 
