@@ -134,6 +134,10 @@ class Wav2CWidget(QWidget):
         main_layout = QVBoxLayout(self)
 
         box_out = QGroupBox("Output directory")
+        box_out.setStyleSheet(
+            "QGroupBox { border: 1px solid #cccccc; border-radius: 4px; margin-top: 8px; padding-top: 8px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px 0 3px; }"
+        )
         g = QGridLayout(box_out)
 
         self.chkSameDir = QCheckBox("Use the same directory as each WAV file")
@@ -153,6 +157,10 @@ class Wav2CWidget(QWidget):
         main_layout.addWidget(box_out)
 
         box_opts = QGroupBox("Options")
+        box_opts.setStyleSheet(
+            "QGroupBox { border: 1px solid #cccccc; border-radius: 4px; margin-top: 8px; padding-top: 8px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px 0 3px; }"
+        )
         hopt = QHBoxLayout(box_opts)
 
         hopt.addWidget(QLabel("Max samples (0 = all):"))
@@ -165,6 +173,10 @@ class Wav2CWidget(QWidget):
         main_layout.addWidget(box_opts)
 
         box_files = QGroupBox("WAV files (drag here or use 'Add files…')")
+        box_files.setStyleSheet(
+            "QGroupBox { border: 1px solid #cccccc; border-radius: 4px; margin-top: 8px; padding-top: 8px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px 0 3px; }"
+        )
         vfiles = QVBoxLayout(box_files)
 
         self.lstFiles = WavDropList()

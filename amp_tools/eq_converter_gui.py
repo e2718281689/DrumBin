@@ -8,7 +8,7 @@ import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QTextEdit, QPushButton,
-    QFileDialog, QMessageBox
+    QFileDialog, QMessageBox, QGroupBox
 )
 
 
@@ -25,9 +25,18 @@ class EqConverterWidget(QWidget):
         title = QLabel("<b>EQ Matrix → C Code Generator</b>")
         layout.addWidget(title)
 
+        # Input box with consistent styling
+        box_in = QGroupBox("Input (2D JSON array)")
+        box_in.setStyleSheet(
+            "QGroupBox { border: 1px solid #cccccc; border-radius: 4px; margin-top: 8px; padding-top: 8px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px 0 3px; }"
+        )
+        v_in = QVBoxLayout(box_in)
+        
         self.input_edit = QTextEdit()
         self.input_edit.setPlaceholderText("Paste 2D JSON array here...")
-        layout.addWidget(self.input_edit)
+        v_in.addWidget(self.input_edit)
+        layout.addWidget(box_in)
 
         hbtn = QHBoxLayout()
         self.btnOpen = QPushButton("Open JSON…")
@@ -40,9 +49,18 @@ class EqConverterWidget(QWidget):
         hbtn.addStretch(1)
         layout.addLayout(hbtn)
 
+        # Output box with consistent styling
+        box_out = QGroupBox("Output (C Code)")
+        box_out.setStyleSheet(
+            "QGroupBox { border: 1px solid #cccccc; border-radius: 4px; margin-top: 8px; padding-top: 8px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px 0 3px; }"
+        )
+        v_out = QVBoxLayout(box_out)
+        
         self.output_edit = QTextEdit()
         self.output_edit.setReadOnly(True)
-        layout.addWidget(self.output_edit)
+        v_out.addWidget(self.output_edit)
+        layout.addWidget(box_out)
 
         self.btnOpen.clicked.connect(self.open_file)
         self.btnConvert.clicked.connect(self.convert_data)
