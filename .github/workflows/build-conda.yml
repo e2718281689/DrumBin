@@ -36,8 +36,7 @@ jobs:
           conda activate DrumBin
           python -V
           pyinstaller --name DrumBin --onefile --noconsole app.py
-          pyinstaller --name wav2c_gui --onefile --noconsole wav2c_gui.py
-          pyinstaller --name mlp_converter_gui --onefile --noconsole mlp_converter_gui.py
+          pyinstaller --name AmpTools --onefile --noconsole main_app.py
           ls -l dist
 
       - name: Upload artifact
@@ -46,8 +45,7 @@ jobs:
           name: DrumBin-windows
           path: |
             dist/DrumBin.exe
-            dist/wav2c_gui.exe
-            dist/mlp_converter_gui.exe
+            dist/AmpTools.exe
 
   release:
     needs: win-exe
@@ -65,6 +63,5 @@ jobs:
         with:
           files: |
                 dist/DrumBin.exe
-                dist/wav2c_gui.exe
-                dist/mlp_converter_gui.exe
+                dist/AmpTools.exe
           generate_release_notes: true

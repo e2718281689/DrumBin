@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget, QStatusBar
 from wav2c_gui import Wav2CWidget
 from mlp_converter_gui import MlpConverterWidget
 from eq_converter_gui import EqConverterWidget
+from float2wav_gui import Float2WavWidget
 
 
 class MainApp(QMainWindow):
@@ -25,11 +26,13 @@ class MainApp(QMainWindow):
         self.setCentralWidget(tabs)
 
         self.tab_wav = Wav2CWidget()
+        self.tab_f2w = Float2WavWidget()
         self.tab_mlp = MlpConverterWidget()
         self.tab_eq = EqConverterWidget()
 
         tabs.addTab(self.tab_eq, "EQ Matrix → C")
         tabs.addTab(self.tab_wav, "WAV → C array")
+        tabs.addTab(self.tab_f2w, "Float array → WAV")
         tabs.addTab(self.tab_mlp, "JSON → MLP_Model")
 
         self.status = QStatusBar(self)
