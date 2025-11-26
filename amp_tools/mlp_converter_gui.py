@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-JSON -> C 'MLP_Model' struct formatter GUI (PySide6) - English UI
-
-- 把 JSON 中的简单 MLP 描述转成 C 代码
-- 你可以按自己的 C 结构体格式修改 to_c_struct 函数
+MLP converter GUI inside amp_tools package (copied from root).
 """
 
 import json
@@ -13,7 +10,6 @@ import re
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
-    QApplication,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -29,7 +25,6 @@ from PySide6.QtWidgets import (
 
 
 def format_float(v: float) -> str:
-    """格式化 float 为 C 代码形式."""
     return f"{float(v):.8f}f"
 
 
@@ -38,31 +33,6 @@ def _flatten_2d(mat):
 
 
 def to_c_struct(json_text: str, model_name: str = "Powerball_mlp") -> str:
-    """
-    Convert the given JSON into the required C struct initializer.
-
-    Expected JSON schema:
-    {
-      "numberOfLayers": 3,
-      "layerSizes": [1, 2, 2, 1],
-      "weightsAndBiases": [
-        {"weights":[...], "biases":[...]},
-        ...
-      ]
-    }
-
-    Output example:
-
-    static const MLP_Model Powerball_mlp __attribute__((aligned(4))) =
-    {
-        .layer1_weights = { ... },
-        .layer1_biases  = { ... },
-        .layer2_weights = { ... },
-        .layer2_biases  = { ... },
-        ...
-    };
-    """
-
     data = json.loads(json_text)
 
     wab = data.get("weightsAndBiases")
@@ -75,15 +45,9 @@ def to_c_struct(json_text: str, model_name: str = "Powerball_mlp") -> str:
     header = f"static const MLP_Model {model_name} __attribute__((aligned(4))) = \n{{"
     lines.append(header)
 
-    # Optional validation against layerSizes
     def _validate_layer(idx: int, weights, biases):
-        """
-        idx: 1-based layer index
-        layerSizes: [size_0, size_1, ..., size_N], N = numberOfLayers
-        对应关系: 第 idx 层: in_size = layerSizes[idx-1], out_size = layerSizes[idx]
-        """
         if not layer_sizes or not isinstance(layer_sizes, list) or len(layer_sizes) < 2:
-            return  # no validation info available
+            return
         try:
             in_size = int(layer_sizes[idx - 1])
             out_size = int(layer_sizes[idx])
@@ -121,9 +85,10 @@ def to_c_struct(json_text: str, model_name: str = "Powerball_mlp") -> str:
     return "\n".join(lines)
 
 
-class DropTextEdit(QTextEdit):
-    """支持拖放 .json 文件的文本框."""
+from PySide6.QtWidgets import QTextEdit
 
+
+class DropTextEdit(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
@@ -149,47 +114,41 @@ class DropTextEdit(QTextEdit):
                     try:
                         text = Path(path).read_text(encoding="utf-8")
                         self.setPlainText(text)
-
-                        # ---- 新增：自动设置 model_name ----
                         parent = self.parentWidget()
                         if parent is not None and hasattr(parent, "name_edit"):
-                            base = Path(path).stem                      # 文件名（不含扩展名）
-                            safe = re.sub(r"[^0-9a-zA-Z_]", "_", base)   # 转成 C 合法变量名
+                            base = Path(path).stem
+                            safe = re.sub(r"[^0-9a-zA-Z_]", "_", base)
                             if re.match(r"^[0-9]", safe):
                                 safe = "_" + safe
                             if safe:
                                 parent.name_edit.setText(safe)
-
                     except Exception as e:
                         QMessageBox.warning(self, "Error", f"Failed to read file:\n{e}")
 
             event.acceptProposedAction()
         elif event.mimeData().hasText():
-            # 粘贴 JSON 的情况，不自动改 model_name
             self.setPlainText(event.mimeData().text())
             event.acceptProposedAction()
         else:
             super().dropEvent(event)
 
 
-class OutputWindow(QMainWindow):
-    """显示 C 代码的输出窗口."""
+from PySide6.QtWidgets import QMainWindow
 
+
+class OutputWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("C Output")
         self.resize(800, 600)
-
         self.text = QTextEdit(self)
         self.text.setReadOnly(True)
         self.setCentralWidget(self.text)
-
         self._create_menu()
 
     def _create_menu(self):
         menubar = QMenuBar(self)
         self.setMenuBar(menubar)
-
         file_menu = menubar.addMenu("&File")
         act_save = QAction("Save as...", self)
         act_save.triggered.connect(self.save_as)
@@ -199,12 +158,7 @@ class OutputWindow(QMainWindow):
         self.text.setPlainText(code)
 
     def save_as(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save C file",
-            "",
-            "C/Headers (*.c *.h);;All files (*.*)",
-        )
+        path, _ = QFileDialog.getSaveFileName(self, "Save C file", "", "C/Headers (*.c *.h);;All files (*.*)")
         if not path:
             return
         try:
@@ -214,57 +168,38 @@ class OutputWindow(QMainWindow):
 
 
 class MlpConverterWidget(QWidget):
-    """可嵌入的 JSON -> C MLP 转换 Widget."""
-
     def __init__(self, parent=None):
         super().__init__(parent)
-
         self.output_win = OutputWindow(self)
-
         layout = QVBoxLayout(self)
-
         title = QLabel("<b>JSON → C struct (MLP_Model)</b>")
         title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(title)
-
-        # 模型名
         row_name = QHBoxLayout()
         row_name.addWidget(QLabel("Model name:"))
         self.name_edit = QLineEdit("mlp_model")
         row_name.addWidget(self.name_edit, 1)
-
         self.btnPasteSample = QPushButton("Paste sample JSON")
         row_name.addWidget(self.btnPasteSample)
         layout.addLayout(row_name)
-
-        # JSON 编辑框
         self.input_edit = DropTextEdit()
         layout.addWidget(self.input_edit, 1)
-
-        # 按钮行
         btn_row = QHBoxLayout()
         self.btnOpen = QPushButton("Open JSON file…")
         self.btnConvert = QPushButton("Convert")
         self.btnClear = QPushButton("Clear")
         self.btnShowOutput = QPushButton("Show output window")
-
         btn_row.addWidget(self.btnOpen)
         btn_row.addWidget(self.btnConvert)
         btn_row.addWidget(self.btnClear)
         btn_row.addWidget(self.btnShowOutput)
         btn_row.addStretch(1)
         layout.addLayout(btn_row)
-
-        # 连接
         self.btnOpen.clicked.connect(self.open_file)
         self.btnConvert.clicked.connect(self.convert_now)
         self.btnClear.clicked.connect(self.input_edit.clear)
         self.btnShowOutput.clicked.connect(self.output_win.show)
         self.btnPasteSample.clicked.connect(self.paste_sample)
-
-    # ----------------------
-    # 槽函数
-    # ----------------------
 
     def paste_sample(self):
         sample = {
@@ -312,26 +247,18 @@ class MlpConverterWidget(QWidget):
         self.input_edit.setPlainText(json.dumps(sample, indent=2))
 
     def open_file(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Open JSON file",
-            "",
-            "JSON files (*.json);;All files (*.*)",
-        )
+        path, _ = QFileDialog.getOpenFileName(self, "Open JSON file", "", "JSON files (*.json);;All files (*.*)")
         if not path:
             return
         try:
             text = Path(path).read_text(encoding="utf-8")
             self.input_edit.setPlainText(text)
-
-            # --- 新增：根据文件名自动设置 model_name ---
-            base = Path(path).stem                        # 文件名（无扩展名）
-            safe = re.sub(r"[^0-9a-zA-Z_]", "_", base)    # 变成 C 合法变量名
+            base = Path(path).stem
+            safe = re.sub(r"[^0-9a-zA-Z_]", "_", base)
             if re.match(r"^[0-9]", safe):
                 safe = "_" + safe
             if safe:
                 self.name_edit.setText(safe)
-
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to read file:\n{e}")
 
@@ -340,42 +267,33 @@ class MlpConverterWidget(QWidget):
         if not model_name:
             QMessageBox.warning(self, "Error", "Model name cannot be empty.")
             return
-
         text = self.input_edit.toPlainText()
         if not text.strip():
             QMessageBox.warning(self, "Error", "JSON input is empty.")
             return
-
         try:
             code = to_c_struct(text, model_name)
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to generate C code:\n{e}")
             return
-
         self.output_win.set_code(code)
         self.output_win.show()
 
+    class MainWindow(QMainWindow):
+        def __init__(self):
+            super().__init__()
+            self.setWindowTitle("JSON → C 'MLP_Model' formatter - PySide6")
+            self.resize(900, 650)
+            widget = MlpConverterWidget(self)
+            self.setCentralWidget(widget)
 
-class MainWindow(QMainWindow):
-    """单独运行本文件时用到的主窗口."""
+    def main():
+        import sys
+        from PySide6.QtWidgets import QApplication
+        app = QApplication(sys.argv)
+        win = MlpConverterWidget()
+        win.show()
+        sys.exit(app.exec())
 
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("JSON → C 'MLP_Model' formatter - PySide6")
-        self.resize(900, 650)
-
-        widget = MlpConverterWidget(self)
-        self.setCentralWidget(widget)
-
-
-def main():
-    import sys
-
-    app = QApplication(sys.argv)
-    win = MainWindow()
-    win.show()
-    sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()
+    if __name__ == "__main__":
+        main()

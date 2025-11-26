@@ -35,8 +35,8 @@ jobs:
           source "$CONDA/etc/profile.d/conda.sh"
           conda activate DrumBin
           python -V
-          pyinstaller --name DrumBin --onefile --noconsole app.py
-          pyinstaller --name AmpTools --onefile --noconsole main_app.py
+          pyinstaller --name DrumBin --onefile --noconsole DrumBin.py
+          pyinstaller --name AmpTools --onefile --noconsole amp_tools.py
           ls -l dist
 
       - name: Upload artifact

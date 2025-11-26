@@ -20,11 +20,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from wav_utils import parse_float_array, float_array_to_wav
+from .wav_utils import parse_float_array, float_array_to_wav
 
 
 class Float2WavWidget(QWidget):
-    """浮点数组（文本）→ WAV 的简单 UI Widget。"""
+    """Floating-point array to WAV widget."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -113,7 +113,6 @@ class Float2WavWidget(QWidget):
 
         out = self.out_path
         if not out:
-            # ask
             out, _ = QFileDialog.getSaveFileName(self, "Choose WAV file", "", "WAV files (*.wav)")
             if not out:
                 return

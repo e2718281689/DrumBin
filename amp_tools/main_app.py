@@ -1,25 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-Main GUI app: combine
-- WAV → C float array (.h)
-- JSON → C 'MLP_Model' struct
-into one window with tabs.
+Main GUI app inside amp_tools package.
 """
 
 import sys
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget, QStatusBar
 
-from wav2c_gui import Wav2CWidget
-from mlp_converter_gui import MlpConverterWidget
-from eq_converter_gui import EqConverterWidget
-from float2wav_gui import Float2WavWidget
+from .wav2c_gui import Wav2CWidget
+from .mlp_converter_gui import MlpConverterWidget
+from .eq_converter_gui import EqConverterWidget
+from .float2wav_gui import Float2WavWidget
 
 
 class MainApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Audio & MLP Tools - PySide6")
+        self.setWindowTitle("Audio & MLP Tools - PySide6 (amp_tools)")
         self.resize(1100, 700)
 
         tabs = QTabWidget(self)

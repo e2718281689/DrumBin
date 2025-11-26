@@ -1,9 +1,9 @@
-"""Small demo: create a sine wave array and write WAV using wav_utils."""
-from math import sin, pi
+"""Small demo: create a sine wave array and write WAV using amp_tools.wav_utils."""
+from math import pi
 
 import numpy as np
 
-from wav_utils import float_array_to_wav
+from .wav_utils import float_array_to_wav
 
 
 def make_sine(freq=440.0, sr=44100, dur=1.0):

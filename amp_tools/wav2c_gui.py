@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-PySide6 GUI: Drag-and-drop WAV -> C-style float array (.h)
-
-- 默认输出到源文件同目录；也可自选输出目录
-- 立体声自动转单声道（取均值）
-- 使用 soundfile 读取多种位深
+WAV -> C float array widget (moved into amp_tools package).
 """
 
 import os
@@ -16,7 +12,6 @@ import soundfile as sf
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication,
     QCheckBox,
     QFileDialog,
     QGridLayout,
@@ -38,7 +33,6 @@ from PySide6.QtWidgets import (
 
 
 def sanitize_var_name(name: str) -> str:
-    """把文件名转成合法的 C 变量名."""
     base = os.path.splitext(os.path.basename(name))[0]
     base = re.sub(r"[^0-9a-zA-Z_]", "_", base)
     if re.match(r"^[0-9]", base):
@@ -49,21 +43,14 @@ def sanitize_var_name(name: str) -> str:
 
 
 def wav_to_mono_float(path: str, max_samples: int = 0) -> tuple[np.ndarray, int]:
-    """读取 wav，转为单声道 float32 数组和采样率."""
     data, sr = sf.read(path, always_2d=True, dtype="float32")
-    # (samples, channels) -> (samples,)
     mono = data.mean(axis=1)
     if max_samples > 0:
         mono = mono[:max_samples]
     return mono, sr
 
 
-def to_c_array_header(
-    samples: np.ndarray,
-    sr: int,
-    var_name: str,
-) -> str:
-    """生成一个简单的 .h 内容."""
+def to_c_array_header(samples: np.ndarray, sr: int, var_name: str) -> str:
     header_guard = re.sub(r"[^0-9A-Z_]", "_", var_name.upper()) + "_H"
     lines = []
     lines.append(f"#ifndef {header_guard}")
@@ -80,7 +67,6 @@ def to_c_array_header(
     lines.append(f"static const int {var_name}_len = {len(samples)};")
     lines.append(f"static const float {var_name}[] = {{")
 
-    # 每行 8 个
     row = []
     for i, v in enumerate(samples):
         row.append(f"{v:.8f}")
@@ -99,8 +85,6 @@ def to_c_array_header(
 
 
 class WavDropList(QListWidget):
-    """支持拖放 WAV 文件的列表."""
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
@@ -129,7 +113,6 @@ class WavDropList(QListWidget):
         event.acceptProposedAction()
 
     def add_path(self, path: str):
-        # 去重
         for i in range(self.count()):
             if self.item(i).data(Qt.UserRole) == path:
                 return
@@ -143,8 +126,6 @@ class WavDropList(QListWidget):
 
 
 class Wav2CWidget(QWidget):
-    """可嵌入的 WAV → C 数组转换 Widget."""
-
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -152,7 +133,6 @@ class Wav2CWidget(QWidget):
 
         main_layout = QVBoxLayout(self)
 
-        # --- 输出目录设置 ---
         box_out = QGroupBox("Output directory")
         g = QGridLayout(box_out)
 
@@ -172,7 +152,6 @@ class Wav2CWidget(QWidget):
 
         main_layout.addWidget(box_out)
 
-        # --- 采样截断设置 ---
         box_opts = QGroupBox("Options")
         hopt = QHBoxLayout(box_opts)
 
@@ -185,7 +164,6 @@ class Wav2CWidget(QWidget):
         hopt.addStretch(1)
         main_layout.addWidget(box_opts)
 
-        # --- 文件列表 ---
         box_files = QGroupBox("WAV files (drag here or use 'Add files…')")
         vfiles = QVBoxLayout(box_files)
 
@@ -204,7 +182,6 @@ class Wav2CWidget(QWidget):
 
         main_layout.addWidget(box_files, 1)
 
-        # --- 转换与日志 ---
         hbottom = QHBoxLayout()
         self.btnConvert = QPushButton("Convert to .h")
         self.btnClearLog = QPushButton("Clear Log")
@@ -218,18 +195,13 @@ class Wav2CWidget(QWidget):
         self.logEdit.setPlaceholderText("Log output…")
         main_layout.addWidget(self.logEdit, 1)
 
-        # --- 信号连接 ---
-        self.btnClearLog.clicked.connect(self.logEdit.clear) 
+        self.btnClearLog.clicked.connect(self.logEdit.clear)
         self.chkSameDir.toggled.connect(self._toggle_same_dir)
         self.btnBrowse.clicked.connect(self._choose_outdir)
         self.btnAddFiles.clicked.connect(self._add_files)
         self.btnRemoveSel.clicked.connect(self._remove_selected)
         self.btnClearAll.clicked.connect(self.lstFiles.clear)
         self.btnConvert.clicked.connect(self._convert_all)
-
-    # ----------------------
-    # 事件 / 槽函数
-    # ----------------------
 
     def _log(self, msg: str):
         self.logEdit.append(msg)
@@ -247,12 +219,7 @@ class Wav2CWidget(QWidget):
             self.outEdit.setText(d)
 
     def _add_files(self):
-        files, _ = QFileDialog.getOpenFileNames(
-            self,
-            "Choose WAV files",
-            "",
-            "WAV files (*.wav)",
-        )
+        files, _ = QFileDialog.getOpenFileNames(self, "Choose WAV files", "", "WAV files (*.wav)")
         for f in files:
             self.lstFiles.add_path(f)
 
@@ -300,16 +267,10 @@ class Wav2CWidget(QWidget):
         if ok_count == len(files):
             QMessageBox.information(self, "Done", "All files converted successfully.")
         else:
-            QMessageBox.warning(
-                self,
-                "Finished with errors",
-                f"Converted {ok_count} / {len(files)} files. See log for details.",
-            )
+            QMessageBox.warning(self, "Finished with errors", f"Converted {ok_count} / {len(files)} files. See log for details.")
 
 
 class MainWindow(QMainWindow):
-    """单独运行本文件时用到的主窗口."""
-
     def __init__(self):
         super().__init__()
         self.setWindowTitle("WAV → C float array (.h) - PySide6")
