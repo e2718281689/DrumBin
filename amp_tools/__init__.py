@@ -7,4 +7,5 @@ __all__ = [
     "wav_utils",
     "mlp_converter_gui",
     "eq_converter_gui",
+    "float_arr_eq_gui",
 ]
