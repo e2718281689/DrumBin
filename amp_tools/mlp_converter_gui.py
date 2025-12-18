@@ -35,6 +35,9 @@ def _flatten_2d(mat):
 def to_c_struct(json_text: str, model_name: str = "Powerball_mlp") -> str:
     data = json.loads(json_text)
 
+    pre_gain = float(data.get("constantPreGain", 1.0))
+    post_gain = float(data.get("constantPostGain", 1.0))
+
     wab = data.get("weightsAndBiases")
     if not isinstance(wab, list) or not wab:
         raise ValueError("Missing or invalid 'weightsAndBiases' list.")
@@ -75,7 +78,9 @@ def to_c_struct(json_text: str, model_name: str = "Powerball_mlp") -> str:
         warn = _validate_layer(i, weights, biases)
         if warn:
             warnings.append(warn)
-
+            
+    lines.append(f"    .pre_gain  = {format_float(pre_gain)},")
+    lines.append(f"    .post_gain = {format_float(post_gain)},")
     lines.append("};")
 
     if warnings:
