@@ -39,6 +39,38 @@ jobs:
           pyinstaller --name AmpTools --onefile --noconsole amp_tools.py
           ls -l dist
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build WebUI
+        shell: bash
+        run: |
+          cd vsthost/webui
+          npm install
+          npm run build
+
+      - name: Install WebView2
+        shell: powershell
+        run: |
+          nuget install Microsoft.Web.WebView2 -Version 1.0.2210.55 -OutputDirectory ${{ github.workspace }}/packages
+
+      - name: Build VSTHost
+        shell: bash
+        run: |
+          cmake -B build_vsthost -S vsthost -DCMAKE_BUILD_TYPE=Release -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/packages"
+          cmake --build build_vsthost --config Release
+          
+          # Prepare VSTHost package
+          mkdir -p dist/VSTHost/webui
+          find build_vsthost -name "VSTHostApp.exe" -exec cp {} dist/VSTHost/ \;
+          cp -r vsthost/webui/dist dist/VSTHost/webui/
+          
+          # Zip VSTHost
+          cd dist
+          7z a VSTHost.zip VSTHost
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -46,6 +78,7 @@ jobs:
           path: |
             dist/DrumBin.exe
             dist/AmpTools.exe
+            dist/VSTHost.zip
 
   release:
     needs: win-exe
@@ -64,4 +97,5 @@ jobs:
           files: |
                 dist/DrumBin.exe
                 dist/AmpTools.exe
+                dist/VSTHost.zip
           generate_release_notes: true
