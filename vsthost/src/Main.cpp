@@ -2,6 +2,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_gui_extra/juce_gui_extra.h>
+#include <BinaryData.h>
 
 #include <cstring>
 #include <optional>
@@ -902,9 +903,6 @@ private:
 
     std::optional<juce::WebBrowserComponent::Resource> provideResource(const juce::String& path) const
     {
-        if (!webRoot.exists())
-            return std::nullopt;
-
         auto requestPath = path.isEmpty() ? "/" : path;
         if (!requestPath.startsWithChar('/'))
             requestPath = "/" + requestPath;
@@ -916,17 +914,41 @@ private:
             requestPath = "/index.html";
 
         const auto relative = requestPath.substring(1);
-        const auto file = webRoot.getChildFile(relative);
-        if (!file.existsAsFile())
-            return std::nullopt;
 
-        juce::WebBrowserComponent::Resource res;
-        res.data = loadBytesFromFile(file);
-        if (res.data.empty())
-            return std::nullopt;
+        // Try loading from BinaryData first
+        {
+            juce::String resourceName = relative;
+            resourceName = resourceName.replaceCharacter('.', '_');
+            resourceName = resourceName.replaceCharacter('-', '_');
+            
+            int size = 0;
+            if (const char* data = WebUIBinaryData::getNamedResource(resourceName.toRawUTF8(), size))
+            {
+                juce::WebBrowserComponent::Resource res;
+                res.data.resize(size);
+                std::memcpy(res.data.data(), data, size);
+                res.mimeType = getMimeTypeForFile(juce::File(relative)); // Just for mime type detection
+                return res;
+            }
+        }
 
-        res.mimeType = getMimeTypeForFile(file);
-        return res;
+        // Fallback to local file system (for development)
+        if (webRoot.exists())
+        {
+            const auto file = webRoot.getChildFile(relative);
+            if (file.existsAsFile())
+            {
+                juce::WebBrowserComponent::Resource res;
+                res.data = loadBytesFromFile(file);
+                if (!res.data.empty())
+                {
+                    res.mimeType = getMimeTypeForFile(file);
+                    return res;
+                }
+            }
+        }
+
+        return std::nullopt;
     }
 
     juce::WebBrowserComponent::Options makeBrowserOptions()

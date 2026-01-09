@@ -62,14 +62,9 @@ jobs:
           cmake -B build_vsthost -S vsthost -DCMAKE_BUILD_TYPE=Release -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/packages"
           cmake --build build_vsthost --config Release
           
-          # Prepare VSTHost package
-          mkdir -p dist/VSTHost/webui
-          find build_vsthost -name "VSTHostApp.exe" -exec cp {} dist/VSTHost/ \;
-          cp -r vsthost/webui/dist dist/VSTHost/webui/
-          
-          # Zip VSTHost
-          cd dist
-          7z a VSTHost.zip VSTHost
+          # Copy VSTHost exe
+          mkdir -p dist
+          find build_vsthost -name "VSTHostApp.exe" -exec cp {} dist/ \;
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -78,7 +73,7 @@ jobs:
           path: |
             dist/DrumBin.exe
             dist/AmpTools.exe
-            dist/VSTHost.zip
+            dist/VSTHostApp.exe
 
   release:
     needs: win-exe
@@ -97,5 +92,5 @@ jobs:
           files: |
                 dist/DrumBin.exe
                 dist/AmpTools.exe
-                dist/VSTHost.zip
+                dist/VSTHostApp.exe
           generate_release_notes: true

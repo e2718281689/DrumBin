@@ -27,6 +27,15 @@ juce_add_gui_app(VSTHostApp
   NEEDS_WEBVIEW2 TRUE
 )
 
+# Add WebUI resources
+juce_add_binary_data(WebUIResources
+  NAMESPACE WebUIBinaryData
+  SOURCES
+    webui/dist/index.html
+    webui/dist/app.js
+    webui/dist/style.css
+)
+
 target_sources(VSTHostApp
   PRIVATE
     src/Main.cpp
@@ -49,6 +58,7 @@ target_compile_options(VSTHostApp
 
 target_link_libraries(VSTHostApp
   PRIVATE
+    WebUIResources
     juce::juce_gui_extra
     juce::juce_audio_utils
     juce::juce_audio_processors
