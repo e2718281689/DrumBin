@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VSTHostApp</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="topbar">
+        <div class="title">VSTHostApp</div>
+        <div class="pill">JUCE 8 WebView UI</div>
+        <div class="pill ok" id="statusPill">准备就绪</div>
+        <div style="flex: 1"></div>
+        <button class="secondary" id="refreshBtn">刷新状态</button>
+      </div>
+
+      <div class="grid">
+        <div class="col">
+          <div class="card">
+            <div class="hd">
+              <div class="h">插件</div>
+              <div class="sub">VST3</div>
+            </div>
+            <div class="bd">
+              <div class="row">
+                <div class="label">名称</div>
+                <div class="val" id="pluginName">未加载</div>
+              </div>
+              <div class="row wrap">
+                <button id="choosePluginBtn">选择插件文件…</button>
+                <button class="secondary" id="openEditorBtn">打开插件界面</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card grow">
+            <div class="hd">
+              <div class="h">数组处理</div>
+              <div class="sub">单声道 float → 单声道 float</div>
+            </div>
+            <div class="bd grow">
+              <div class="row">
+                <div class="label">采样率</div>
+                <input id="sampleRate" value="44100" />
+                <div class="label auto">Block</div>
+                <input id="blockSize" value="1024" />
+                <button class="secondary" id="applyBlockBtn">应用</button>
+              </div>
+              <div class="split grow">
+                <div class="vcol grow">
+                  <div class="status">输入数组（空格/换行/逗号分隔）</div>
+                  <textarea id="arrayIn" class="grow"></textarea>
+                  <button id="processArrayBtn">处理数组</button>
+                </div>
+                <div class="vcol grow">
+                  <div class="status">输出数组</div>
+                  <textarea id="arrayOut" class="grow" readonly></textarea>
+                  <div class="row wrap">
+                    <button class="secondary" id="copyOutBtn">复制输出</button>
+                    <button class="secondary" id="clearBtn">清空</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="card">
+            <div class="hd">
+              <div class="h">音频离线处理</div>
+              <div class="sub">输入文件 → 输出 WAV</div>
+            </div>
+            <div class="bd">
+              <div class="row">
+                <div class="label">输入</div>
+                <div class="val" id="inPath"></div>
+                <button class="secondary" id="chooseInBtn">选择…</button>
+              </div>
+              <div class="row">
+                <div class="label">输出</div>
+                <div class="val" id="outPath"></div>
+                <button class="secondary" id="chooseOutBtn">选择…</button>
+              </div>
+              <div class="row wrap">
+                <button id="startBtn">开始处理</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card grow">
+            <div class="hd">
+              <div class="h">日志</div>
+              <div class="sub">状态 / 错误</div>
+            </div>
+            <div class="bd grow">
+              <div class="log grow" id="log"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
+
