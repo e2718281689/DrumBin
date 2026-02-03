@@ -1,4 +1,4 @@
-name: Build DrumBin (conda)
+name: Build DrumBin (uv)
 
 on:
   workflow_dispatch:    # 手动触发
@@ -14,29 +14,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@v3
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          activate-environment: DrumBin
-          environment-file: environment.yml
-          python-version: "3.11"
-          auto-activate-base: false
+          enable-cache: true
 
-      - name: Debug conda
-        shell: bash -l {0}
-        run: |
-          source "$CONDA/etc/profile.d/conda.sh"
-          conda info
-          conda list
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync
 
       - name: Build EXE
-        shell: bash -l {0}
+        shell: bash
         run: |
-          source "$CONDA/etc/profile.d/conda.sh"
-          conda activate DrumBin
-          python -V
-          pyinstaller --name DrumBin --onefile --noconsole DrumBin.py
-          pyinstaller --name AmpTools --onefile --noconsole amp_tools.py
+          uv run pyinstaller --name DrumBin --onefile --noconsole drumbin.py
+          uv run pyinstaller --name AmpTools --onefile --noconsole amp_tools.py
           ls -l dist
 
       - name: Setup Node.js
