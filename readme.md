@@ -59,3 +59,27 @@ cmake ..
 ```bash
 cmake --build .
 ```
+
+
+### 槽位式交互界面规范 (Slot UI Spec)
+- **布局**: 纵向排列 128 个槽位 (MIDI 0-127)。
+- **显示**: 左侧 MIDI 编号，右侧鼓类型名称 (中文)。
+- **交互**: 支持 WAV 文件拖拽，显示文件名与时长。
+- **预览**: 16x16 播放按钮，44.1kHz 16-bit 播放，100ms 进度刷新。
+- **验证**: 仅支持 44.1/48kHz, 16/24-bit WAV。非法文件红色高亮并提示。
+- **导出**: 校验所有占用槽位，导出 BIN 及偏移量。
+
+### MIDI 映射表 (Default Map)
+36 = 底鼓 (Kick)
+38 = 军鼓中心 (Center Snare)
+37 = 军鼓边击 (Rim Snare)
+42 = 闭镲 (Close Hat)
+46 = 开镲 (Open Hat)
+44 = 踩镲 (Pedal Hat)
+51 = 叮叮镲镲面 (Bow Ride)
+53 = 叮叮镲镲帽 (Bell Ride)
+49 = 吊镲 (Crash)
+50 = 通鼓1 (Tom 1)
+47 = 通鼓2 (Tom 2)
+43 = 通鼓3 (Tom 3)
+
